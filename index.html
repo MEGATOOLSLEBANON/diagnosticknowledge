@@ -95,8 +95,18 @@
 
     <script>
         // --- START CONFIGURATION ---
-        // CSV URL for fetching raw data from your published Google Sheet
-        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRm1PJeli-COOlqBAFYJ25K0JuiMD8e4BYuTG3wBVr2IsZ80fqy7Ex42smUsbSKPiM_FCsuXDUTRqrX/pub?output=csv'; 
+        // 1. SHEET ID: The long key extracted from your published URL (the part after /d/e/ and before /pub).
+        const SHEET_ID = '2PACX-1vRm1PJeli-COOlqBAFYJ25K0JuiMD8e4BYuTG3wBVr2IsZ80fqy7Ex42smUsbSKPiM_FCsuXDUTRqrX'; 
+        
+        // 2. GRID ID (GID): This is the ID of the specific sheet/tab you want to display.
+        // You find this by opening the Google Sheet (edit view), clicking the tab, 
+        // and looking for the number at the end of the URL (e.g., "...#gid=123456789").
+        // '0' is usually the first tab (Sheet1).
+        const SHEET_GID = '0'; 
+        
+        // Constructs the final CORS-friendly CSV export URL
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=${SHEET_GID}&single=true&output=csv`; 
+        
         // --- END CONFIGURATION ---
 
         let allData = [];
@@ -115,20 +125,26 @@
             if (lines.length === 0) return [];
             
             // Assuming the first line is the header and sanitizing it
+            // We strip non-alphabetic characters and convert to uppercase for robust key mapping
             const headers = lines[0].split(',').map(header => 
                 header.trim().toUpperCase().replace(/[^A-Z]/g, '')
-            );
+            ).filter(h => h.length > 0); // Filter out empty headers
 
+            if (headers.length === 0) {
+                 console.error("No valid headers found in the CSV data.");
+                 return [];
+            }
+            
             const data = [];
             for (let i = 1; i < lines.length; i++) {
                 // Regex to split by comma, but ignore commas inside double quotes
                 const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
 
-                if (values.length === headers.length) {
+                if (values.length >= headers.length) {
                     let obj = {};
                     for (let j = 0; j < headers.length; j++) {
                         // Clean up quotes and newlines
-                        let value = values[j].trim().replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+                        let value = values[j] ? values[j].trim().replace(/^"|"$/g, '').replace(/\\n/g, '\n') : '';
                         obj[headers[j]] = value;
                     }
                     data.push(obj);
@@ -151,25 +167,30 @@
                 // Implementing exponential backoff for robustness
                 let response = null;
                 const maxRetries = 3;
+                let lastError = null;
+                
                 for (let i = 0; i < maxRetries; i++) {
                     try {
-                        response = await fetch(SHEET_URL);
+                        // The 'cache: "no-store"' is sometimes necessary to prevent stale browser cache
+                        response = await fetch(SHEET_URL, { cache: "no-store" }); 
                         if (response.ok) break;
+                        lastError = `Status: ${response.status}`;
                     } catch (e) {
+                        lastError = e.message;
                         if (i === maxRetries - 1) throw e;
                         await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000)); // Exponential backoff
                     }
                 }
 
                 if (!response || !response.ok) {
-                    throw new Error(`Failed to fetch data: ${response ? response.status : 'Network Error'}`);
+                    throw new Error(`Failed to fetch data. ${lastError}. Check Google Sheet's 'Publish to the web' settings.`);
                 }
 
                 const csvText = await response.text();
                 allData = parseCSV(csvText);
                 
                 if (allData.length === 0) {
-                    throw new Error("Data loaded, but the sheet appears to be empty or misformatted. Check headers and content.");
+                    throw new Error("Data loaded, but the sheet appears to be empty or misformatted. Check the header row.");
                 }
 
                 // Initial render
@@ -179,7 +200,7 @@
             } catch (error) {
                 console.error("Data loading failed:", error);
                 toggleVisibility(errorMessage, true);
-                errorText.textContent = `Error: ${error.message}`;
+                errorText.textContent = `Error loading data: ${error.message}. This is often due to Cross-Origin restrictions or an incorrect GID.`;
             } finally {
                 toggleVisibility(loadingIndicator, false);
             }
@@ -228,8 +249,13 @@
             const dtcFilter = document.getElementById('dtc').value.toUpperCase();
 
             const filtered = allData.filter(item => {
-                const brandMatch = !brandFilter || (item.CARBRAND && item.CARBRAND.toUpperCase().includes(brandFilter));
-                const ecuMatch = !ecuFilter || (item.ECU && item.ECU.toUpperCase().includes(ecuFilter));
+                // Check if the property exists and is not null/undefined before calling includes()
+                const carBrand = (item.CARBRAND || '').toUpperCase();
+                const ecu = (item.ECU || '').toUpperCase();
+                
+                const brandMatch = !brandFilter || carBrand.includes(brandFilter);
+                const ecuMatch = !ecuFilter || ecu.includes(ecuFilter);
+                
                 // Match DTC filter against both the DTC column and the Diagnostic Function column for robustness
                 const dtcOrFunctionText = `${item.DTC || ''} ${item.DIAGNOSTICFUNCTION || ''}`.toUpperCase();
                 const dtcMatch = !dtcFilter || dtcOrFunctionText.includes(dtcFilter);
