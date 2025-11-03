@@ -25,6 +25,10 @@
             background-color: #a5b4fc;
             border-radius: 4px;
         }
+        /* Style for pre-formatted instructions */
+        .instructions-cell {
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center p-4 md:p-8">
@@ -34,16 +38,13 @@
         <h1 class="text-3xl font-bold text-gray-800 mb-2 text-center">
             MegaTools Diagnostic Instructions
         </h1>
-        <p class="text-gray-500 mb-6 text-center">
-            Live data loaded from your published Google Sheet.
+        <p class="text-gray-500 mb-6 text-center font-semibold text-red-600">
+            Displaying **hardcoded static data** to resolve connection issues.
         </p>
 
         <!-- Loading Indicator -->
         <div id="loading-indicator" class="text-center py-8 text-indigo-600 font-semibold hidden">
-            <svg class="animate-spin h-5 w-5 mr-3 inline text-indigo-600" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <!-- Loading is instant with static data, this is kept hidden -->
             Loading Data... Please wait.
         </div>
 
@@ -81,10 +82,10 @@
             </table>
         </div>
 
-        <!-- Error Message -->
+        <!-- Error Message - Hidden now that data is hardcoded -->
         <div id="error-message" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
             <strong class="font-bold">Error!</strong>
-            <span class="block sm:inline" id="error-text">Could not load data. Check the URL and publishing settings.</span>
+            <span class="block sm:inline" id="error-text"></span>
         </div>
 
         <button onclick="window.open('https://megatools-lb.com', '_self')"
@@ -94,133 +95,35 @@
     </div>
 
     <script>
-        // --- START CONFIGURATION ---
-        // 1. SHEET ID: The long key extracted from your published URL (the part after /d/e/ and before /pub).
-        const SHEET_ID = '2PACX-1vRm1PJeli-COOlqBAFYJ25K0JuiMD8e4BYuTG3wBVr2IsZ80fqy7Ex42smUsbSKPiM_FCsuXDUTRqrX'; 
-        
-        // 2. GRID ID (GID): This is the ID of the specific sheet/tab you want to display.
-        // ***********************************************************************************
-        // !!! CRITICAL STEP: VERIFY THIS NUMBER !!! 
-        // Example: If your sheet URL ends in "...#gid=1756401053", use '1756401053'.
-        const SHEET_GID = '0'; // Current GID. Change this if your data is on a different tab!
-        // ***********************************************************************************
-        
-        // Constructs the final CORS-friendly CSV export URL
-        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=${SHEET_GID}&single=true&output=csv`; 
-        
-        // --- END CONFIGURATION ---
+        // Static data array, based on your previous CSV content.
+        const initialData = [
+            { 
+                CARBRAND: 'MERCEDES-BENZ', 
+                CARMODEL: 'W205', 
+                DTC: '', 
+                ECU: 'EZS', 
+                DIAGNOSTICFUNCTION: 'DEACTIVATION OF SOS', 
+                INSTRUCTIONS: 'STEP 1- EZS ECU\nSTEP 2- SETTINGS CHANGEOVER\nSTEP 3- DEACTIVATION OF SOS\nSTEP 4- FROM JA TO NEIN' 
+            },
+            { 
+                CARBRAND: 'MERCEDES-BENZ', 
+                CARMODEL: '', 
+                DTC: '', 
+                ECU: 'TCM \nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2', 
+                DIAGNOSTICFUNCTION: 'TCM ERASURE FOR : \nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2', 
+                INSTRUCTIONS: 'STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP 4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE'
+            },
+            // You can add more data objects here following the same structure
+        ];
 
         let allData = [];
         const loadingIndicator = document.getElementById('loading-indicator');
         const searchControls = document.getElementById('search-controls');
         const tableBody = document.getElementById('table-body');
-        const errorMessage = document.getElementById('error-message');
-        const errorText = document.getElementById('error-text');
+        // const errorMessage = document.getElementById('error-message'); // Error message logic is removed
 
         // Helper function to show/hide elements
         const toggleVisibility = (element, show) => element.classList.toggle('hidden', !show);
-
-        // Utility to parse CSV text into an array of objects
-        function parseCSV(csvText) {
-            // Split the text into lines, handling potential Windows/Unix line endings
-            const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n').filter(line => line.trim() !== '');
-
-            if (lines.length === 0) return [];
-            
-            // The CSV parser from the previous step which handles quoted cells
-            const splitLine = (line) => {
-                // Regex to split by comma, but ignore commas inside double quotes
-                return line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            };
-
-            // Assuming the first non-empty line is the header
-            const headerLine = lines[0];
-            const rawHeaders = splitLine(headerLine);
-            
-            // Sanitizing headers for robust key mapping
-            const headers = rawHeaders.map(header => 
-                header.trim().toUpperCase().replace(/[^A-Z]/g, '')
-            ).filter(h => h.length > 0); 
-
-            if (headers.length === 0) {
-                 console.error("No valid headers found in the CSV data. Raw content likely not CSV.");
-                 return [];
-            }
-            
-            const data = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = splitLine(lines[i]);
-
-                // Ensure we have enough columns to match the headers
-                if (values.length >= headers.length) {
-                    let obj = {};
-                    for (let j = 0; j < headers.length; j++) {
-                        // Clean up quotes and newlines
-                        let value = values[j] ? values[j].trim().replace(/^"|"$/g, '').replace(/\\n/g, '\n') : '';
-                        obj[headers[j]] = value;
-                    }
-                    data.push(obj);
-                } else if (values.length > 1) {
-                    // Log potential parsing issue for debugging
-                    console.warn(`Skipping row ${i+1} due to inconsistent column count: ${values.length} vs ${headers.length}`);
-                }
-            }
-            return data;
-        }
-
-        // Fetches data from the published Google Sheet URL
-        async function fetchData() {
-            toggleVisibility(loadingIndicator, true);
-            toggleVisibility(errorMessage, false);
-            toggleVisibility(searchControls, false);
-            tableBody.innerHTML = '';
-
-            try {
-                // Implementing exponential backoff for robustness
-                let response = null;
-                const maxRetries = 3;
-                let lastError = null;
-                
-                for (let i = 0; i < maxRetries; i++) {
-                    try {
-                        // The 'cache: "no-store"' is necessary to prevent stale browser cache
-                        response = await fetch(SHEET_URL, { cache: "no-store" }); 
-                        if (response.ok) break;
-                        lastError = `Status: ${response.status}`;
-                    } catch (e) {
-                        lastError = e.message;
-                        if (i === maxRetries - 1) throw e;
-                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000)); // Exponential backoff
-                    }
-                }
-
-                if (!response || !response.ok) {
-                    throw new Error(`Failed to fetch data. ${lastError}. Check Google Sheet's 'Publish to the web' settings.`);
-                }
-
-                const csvText = await response.text();
-                
-                // *** IMPORTANT DEBUG STEP: Log the raw text to the console ***
-                console.log("Raw Sheet Content Received:", csvText.substring(0, 500) + (csvText.length > 500 ? '...' : ''));
-
-                allData = parseCSV(csvText);
-                
-                if (allData.length === 0) {
-                    throw new Error("Data loaded, but the sheet appears to be empty or misformatted. Check the header row.");
-                }
-
-                // Initial render
-                renderTable(allData);
-                toggleVisibility(searchControls, true);
-
-            } catch (error) {
-                console.error("Data loading failed:", error);
-                toggleVisibility(errorMessage, true);
-                errorText.textContent = `Error loading data: ${error.message}. This is often due to Cross-Origin restrictions, an incorrect GID, or empty sheet content.`;
-            } finally {
-                toggleVisibility(loadingIndicator, false);
-            }
-        }
 
         // Renders the data into the HTML table
         function renderTable(data) {
@@ -238,21 +141,26 @@
             }
 
             data.forEach(item => {
-                // Use DIAGNOSTICFUNCTION if DTC is blank, and clean up newlines in instructions
+                // Determine what to display for the Function / DTC column
                 const functionOrDTC = (item.DIAGNOSTICFUNCTION && item.DIAGNOSTICFUNCTION.trim() !== '') ? item.DIAGNOSTICFUNCTION : (item.DTC || '-');
+                
+                // Clean up newlines in instructions by replacing them with a <br> tag for HTML display
                 const instructionsHtml = item.INSTRUCTIONS ? item.INSTRUCTIONS.replace(/\n/g, '<br>') : '-';
-
+                
+                // Format ECU text for display
+                const ecuText = item.ECU ? item.ECU.replace(/\n/g, '<br>') : '-';
+                
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-indigo-50 transition duration-100';
                 row.innerHTML = `
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.CARBRAND || '-'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.CARMODEL || '-'}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.ECU || '-'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-500">
+                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">${ecuText}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">
                         <span class="block font-semibold text-gray-800">${functionOrDTC}</span>
                         <span class="block text-xs text-red-500">${item.DTC && item.DTC.trim() !== '' ? `DTC: ${item.DTC}` : ''}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm">${instructionsHtml}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm instructions-cell">${instructionsHtml}</td>
                 `;
                 tableBody.appendChild(row);
             });
@@ -265,7 +173,6 @@
             const dtcFilter = document.getElementById('dtc').value.toUpperCase();
 
             const filtered = allData.filter(item => {
-                // Check if the property exists and is not null/undefined before calling includes()
                 const carBrand = (item.CARBRAND || '').toUpperCase();
                 const ecu = (item.ECU || '').toUpperCase();
                 
@@ -288,8 +195,18 @@
         document.getElementById('dtc').addEventListener('input', filterData);
 
 
-        // Initial data fetch on load
-        window.onload = fetchData;
+        // Load static data on window load
+        window.onload = function() {
+            // Load the hardcoded data
+            allData = initialData;
+            
+            // Render the data immediately
+            renderTable(allData);
+            
+            // Hide the loading indicator and show the search controls
+            toggleVisibility(loadingIndicator, false);
+            toggleVisibility(searchControls, true);
+        };
     </script>
 </body>
 </html>
