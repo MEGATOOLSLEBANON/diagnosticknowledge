@@ -91,66 +91,27 @@
     </div>
 
     <script>
-        // --- DATA INPUT SECTION (FULL DATA CONTENT) ---
-        // This data is sourced directly from the uploaded CSV file.
-        const rawCSVData = `
-CAR BRAND,CAR MODEL,DTC,ECU,DIAGNOSTIC FUNCTION,INSTRUCTIONS
-MERCEDES-BENZ,W205,,EZS,DEACTIVATION OF SOS,"STEP 1- EZS ECU\nSTEP 2- SETTINGS CHANGEOVER\nSTEP 3- DEACTIVATION OF SOS\nSTEP 4- FROM JA TO NEIN"
-MERCEDES-BENZ,,,"TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP  4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE"
-`;
-
-
-        // --- DATA PROCESSING LOGIC ---
-        // Defines the fixed header mapping for the CSV parser
-        const csvHeaders = [
-            'CAR BRAND', 
-            'CAR MODEL', 
-            'DTC', 
-            'ECU', 
-            'DIAGNOSTIC FUNCTION', 
-            'INSTRUCTIONS'
+        // --- DATA INPUT SECTION (DIRECT JAVASCRIPT OBJECTS) ---
+        // The data is now defined directly as an array of objects to avoid CSV parsing errors.
+        const allDataInitial = [
+            {
+                CARBRAND: 'MERCEDES-BENZ',
+                CARMODEL: 'W205',
+                DTC: '',
+                ECU: 'EZS',
+                DIAGNOSTICFUNCTION: 'DEACTIVATION OF SOS',
+                INSTRUCTIONS: 'STEP 1- EZS ECU\nSTEP 2- SETTINGS CHANGEOVER\nSTEP 3- DEACTIVATION OF SOS\nSTEP 4- FROM JA TO NEIN'
+            },
+            {
+                CARBRAND: 'MERCEDES-BENZ',
+                CARMODEL: '',
+                DTC: '',
+                ECU: 'TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2',
+                DIAGNOSTICFUNCTION: 'TCM ERASURE FOR : \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2',
+                INSTRUCTIONS: 'STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP  4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE'
+            }
         ];
 
-        // Utility to parse CSV text into an array of objects
-        function parseCSVToObjects(csvText, headers) {
-            const allLines = csvText.trim().split('\n').filter(line => line.trim() !== '');
-
-            if (allLines.length === 0) return [];
-            
-            // Skip the first line, as it is the header row
-            const lines = allLines.slice(1);
-            
-            const splitLine = (line) => {
-                // Regex to split by comma, but ignore commas inside double quotes
-                const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-                return line.split(regex).map(cell => cell.trim());
-            };
-            
-            const data = [];
-            const sanitizedHeaders = headers.map(header => 
-                header.toUpperCase().replace(/[^A-Z]/g, '')
-            );
-
-            lines.forEach(line => {
-                const values = splitLine(line);
-                
-                // Skip rows that don't look like data (e.g., if they are shorter than expected)
-                if (values.length < headers.length) {
-                    return;
-                }
-
-                let obj = {};
-                for (let j = 0; j < headers.length; j++) {
-                    // Clean up quotes and newlines from quoted cells
-                    let value = values[j] ? values[j].replace(/^"|"$/g, '').replace(/\\n/g, '\n') : '';
-                    
-                    // Map the value to the sanitized header key
-                    obj[sanitizedHeaders[j]] = value;
-                }
-                data.push(obj);
-            });
-            return data;
-        }
 
         // --- GLOBAL VARIABLES & INITIALIZATION ---
         let allData = [];
@@ -181,6 +142,7 @@ MERCEDES-BENZ,,,"TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\n
                 const functionOrDTC = (item.DIAGNOSTICFUNCTION && item.DIAGNOSTICFUNCTION.trim() !== '') ? item.DIAGNOSTICFUNCTION : (item.DTC || '-');
                 
                 // Clean up newlines in instructions by replacing them with a <br> tag for HTML display
+                // NOTE: We no longer need to replace \n because the CSS 'white-space: pre-wrap' handles them.
                 const instructionsHtml = item.INSTRUCTIONS ? item.INSTRUCTIONS.replace(/\n/g, '<br>') : '-';
                 
                 // Format ECU text for display
@@ -233,8 +195,8 @@ MERCEDES-BENZ,,,"TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\n
 
         // Load static data on window load
         window.onload = function() {
-            // Parse the hardcoded CSV data
-            allData = parseCSVToObjects(rawCSVData, csvHeaders);
+            // Initialize data directly from the object array
+            allData = allDataInitial;
             
             // Render the data immediately
             renderTable(allData);
