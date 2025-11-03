@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MegaTools Diagnostic Database Viewer</title>
+    <!-- Load Tailwind CSS for simple styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .data-table-container {
+            max-height: 60vh; /* Set a max height for the table */
+            overflow-y: auto; /* Enable vertical scrolling */
+        }
+        /* Custom scrollbar for aesthetics */
+        .data-table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .data-table-container::-webkit-scrollbar-thumb {
+            background-color: #a5b4fc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <div class="max-w-4xl w-full bg-white shadow-xl rounded-xl p-6 md:p-10 border-t-4 border-indigo-600">
+        
+        <h1 class="text-3xl font-bold text-gray-800 mb-2 text-center">
+            MegaTools Diagnostic Instructions
+        </h1>
+        <p class="text-gray-500 mb-6 text-center">
+            Live data loaded from your published Google Sheet.
+        </p>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="text-center py-8 text-indigo-600 font-semibold hidden">
+            <svg class="animate-spin h-5 w-5 mr-3 inline text-indigo-600" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading Data... Please wait.
+        </div>
+
+        <!-- Search and Filter Controls -->
+        <div id="search-controls" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 hidden">
+            <div>
+                <label for="car-brand" class="block text-sm font-medium text-gray-700">Car Brand</label>
+                <input type="text" id="car-brand" placeholder="e.g., MERCEDES-BENZ" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="ecu" class="block text-sm font-medium text-gray-700">ECU / System</label>
+                <input type="text" id="ecu" placeholder="e.g., EZS or TCM" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="dtc" class="block text-sm font-medium text-gray-700">DTC Code</label>
+                <input type="text" id="dtc" placeholder="e.g., P0171" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+        </div>
+
+        <!-- Data Table Display -->
+        <div id="data-table-container" class="data-table-container shadow-inner rounded-lg border">
+            <table id="data-table" class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-indigo-50 sticky top-0">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-indigo-700 uppercase tracking-wider">Brand</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-indigo-700 uppercase tracking-wider">Model</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-indigo-700 uppercase tracking-wider">ECU</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-indigo-700 uppercase tracking-wider">Function / DTC</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-indigo-700 uppercase tracking-wider">Instructions</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body" class="bg-white divide-y divide-gray-100">
+                    <!-- Data rows will be inserted here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-message" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong class="font-bold">Error!</strong>
+            <span class="block sm:inline" id="error-text">Could not load data. Check the URL and publishing settings.</span>
+        </div>
+
+        <button onclick="window.open('https://megatools-lb.com', '_self')"
+            class="mt-8 w-full bg-gray-500 text-white py-3 rounded-lg shadow-md hover:bg-gray-600 transition duration-150 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50">
+            Go Back to Main Website (megatools-lb.com)
+        </button>
+    </div>
+
+    <script>
+        // --- START CONFIGURATION ---
+        // CSV URL for fetching raw data from your published Google Sheet
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRm1PJeli-COOlqBAFYJ25K0JuiMD8e4BYuTG3wBVr2IsZ80fqy7Ex42smUsbSKPiM_FCsuXDUTRqrX/pub?output=csv'; 
+        // --- END CONFIGURATION ---
+
+        let allData = [];
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const searchControls = document.getElementById('search-controls');
+        const tableBody = document.getElementById('table-body');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+
+        // Helper function to show/hide elements
+        const toggleVisibility = (element, show) => element.classList.toggle('hidden', !show);
+
+        // Utility to parse CSV text into an array of objects
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length === 0) return [];
+            
+            // Assuming the first line is the header and sanitizing it
+            const headers = lines[0].split(',').map(header => 
+                header.trim().toUpperCase().replace(/[^A-Z]/g, '')
+            );
+
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                // Regex to split by comma, but ignore commas inside double quotes
+                const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+
+                if (values.length === headers.length) {
+                    let obj = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        // Clean up quotes and newlines
+                        let value = values[j].trim().replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+                        obj[headers[j]] = value;
+                    }
+                    data.push(obj);
+                } else if (values.length > 1) {
+                    // Log potential parsing issue for debugging
+                    console.warn(`Skipping row ${i+1} due to inconsistent column count: ${values.length} vs ${headers.length}`);
+                }
+            }
+            return data;
+        }
+
+        // Fetches data from the published Google Sheet URL
+        async function fetchData() {
+            toggleVisibility(loadingIndicator, true);
+            toggleVisibility(errorMessage, false);
+            toggleVisibility(searchControls, false);
+            tableBody.innerHTML = '';
+
+            try {
+                // Implementing exponential backoff for robustness
+                let response = null;
+                const maxRetries = 3;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        response = await fetch(SHEET_URL);
+                        if (response.ok) break;
+                    } catch (e) {
+                        if (i === maxRetries - 1) throw e;
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000)); // Exponential backoff
+                    }
+                }
+
+                if (!response || !response.ok) {
+                    throw new Error(`Failed to fetch data: ${response ? response.status : 'Network Error'}`);
+                }
+
+                const csvText = await response.text();
+                allData = parseCSV(csvText);
+                
+                if (allData.length === 0) {
+                    throw new Error("Data loaded, but the sheet appears to be empty or misformatted. Check headers and content.");
+                }
+
+                // Initial render
+                renderTable(allData);
+                toggleVisibility(searchControls, true);
+
+            } catch (error) {
+                console.error("Data loading failed:", error);
+                toggleVisibility(errorMessage, true);
+                errorText.textContent = `Error: ${error.message}`;
+            } finally {
+                toggleVisibility(loadingIndicator, false);
+            }
+        }
+
+        // Renders the data into the HTML table
+        function renderTable(data) {
+            tableBody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-4 py-4 text-center text-gray-500">
+                            No results found. Try adjusting your filters.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            data.forEach(item => {
+                // Use DIAGNOSTICFUNCTION if DTC is blank, and clean up newlines in instructions
+                const functionOrDTC = (item.DIAGNOSTICFUNCTION && item.DIAGNOSTICFUNCTION.trim() !== '') ? item.DIAGNOSTICFUNCTION : (item.DTC || '-');
+                const instructionsHtml = item.INSTRUCTIONS ? item.INSTRUCTIONS.replace(/\n/g, '<br>') : '-';
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-indigo-50 transition duration-100';
+                row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.CARBRAND || '-'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.CARMODEL || '-'}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.ECU || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">
+                        <span class="block font-semibold text-gray-800">${functionOrDTC}</span>
+                        <span class="block text-xs text-red-500">${item.DTC && item.DTC.trim() !== '' ? `DTC: ${item.DTC}` : ''}</span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm">${instructionsHtml}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Filters the data based on input fields
+        function filterData() {
+            const brandFilter = document.getElementById('car-brand').value.toUpperCase();
+            const ecuFilter = document.getElementById('ecu').value.toUpperCase();
+            const dtcFilter = document.getElementById('dtc').value.toUpperCase();
+
+            const filtered = allData.filter(item => {
+                const brandMatch = !brandFilter || (item.CARBRAND && item.CARBRAND.toUpperCase().includes(brandFilter));
+                const ecuMatch = !ecuFilter || (item.ECU && item.ECU.toUpperCase().includes(ecuFilter));
+                // Match DTC filter against both the DTC column and the Diagnostic Function column for robustness
+                const dtcOrFunctionText = `${item.DTC || ''} ${item.DIAGNOSTICFUNCTION || ''}`.toUpperCase();
+                const dtcMatch = !dtcFilter || dtcOrFunctionText.includes(dtcFilter);
+                
+                return brandMatch && ecuMatch && dtcMatch;
+            });
+
+            renderTable(filtered);
+        }
+
+        // Add event listeners to filter inputs
+        document.getElementById('car-brand').addEventListener('input', filterData);
+        document.getElementById('ecu').addEventListener('input', filterData);
+        document.getElementById('dtc').addEventListener('input', filterData);
+
+
+        // Initial data fetch on load
+        window.onload = fetchData;
+    </script>
+</body>
+</html>
