@@ -99,10 +99,11 @@
         const SHEET_ID = '2PACX-1vRm1PJeli-COOlqBAFYJ25K0JuiMD8e4BYuTG3wBVr2IsZ80fqy7Ex42smUsbSKPiM_FCsuXDUTRqrX'; 
         
         // 2. GRID ID (GID): This is the ID of the specific sheet/tab you want to display.
-        // You find this by opening the Google Sheet (edit view), clicking the tab, 
-        // and looking for the number at the end of the URL (e.g., "...#gid=123456789").
-        // '0' is usually the first tab (Sheet1). **MAKE SURE THIS NUMBER IS CORRECT!**
-        const SHEET_GID = '0'; 
+        // ***********************************************************************************
+        // !!! CRITICAL STEP: VERIFY THIS NUMBER !!! 
+        // Example: If your sheet URL ends in "...#gid=1756401053", use '1756401053'.
+        const SHEET_GID = '0'; // Current GID. Change this if your data is on a different tab!
+        // ***********************************************************************************
         
         // Constructs the final CORS-friendly CSV export URL
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?gid=${SHEET_GID}&single=true&output=csv`; 
@@ -121,14 +122,25 @@
 
         // Utility to parse CSV text into an array of objects
         function parseCSV(csvText) {
-            const lines = csvText.trim().split('\n');
+            // Split the text into lines, handling potential Windows/Unix line endings
+            const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n').filter(line => line.trim() !== '');
+
             if (lines.length === 0) return [];
             
-            // Assuming the first line is the header and sanitizing it
-            // We strip non-alphabetic characters and convert to uppercase for robust key mapping
-            const headers = lines[0].split(',').map(header => 
+            // The CSV parser from the previous step which handles quoted cells
+            const splitLine = (line) => {
+                // Regex to split by comma, but ignore commas inside double quotes
+                return line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            };
+
+            // Assuming the first non-empty line is the header
+            const headerLine = lines[0];
+            const rawHeaders = splitLine(headerLine);
+            
+            // Sanitizing headers for robust key mapping
+            const headers = rawHeaders.map(header => 
                 header.trim().toUpperCase().replace(/[^A-Z]/g, '')
-            ).filter(h => h.length > 0); // Filter out empty headers
+            ).filter(h => h.length > 0); 
 
             if (headers.length === 0) {
                  console.error("No valid headers found in the CSV data. Raw content likely not CSV.");
@@ -137,9 +149,9 @@
             
             const data = [];
             for (let i = 1; i < lines.length; i++) {
-                // Regex to split by comma, but ignore commas inside double quotes
-                const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                const values = splitLine(lines[i]);
 
+                // Ensure we have enough columns to match the headers
                 if (values.length >= headers.length) {
                     let obj = {};
                     for (let j = 0; j < headers.length; j++) {
@@ -171,7 +183,7 @@
                 
                 for (let i = 0; i < maxRetries; i++) {
                     try {
-                        // The 'cache: "no-store"' is sometimes necessary to prevent stale browser cache
+                        // The 'cache: "no-store"' is necessary to prevent stale browser cache
                         response = await fetch(SHEET_URL, { cache: "no-store" }); 
                         if (response.ok) break;
                         lastError = `Status: ${response.status}`;
