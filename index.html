@@ -92,7 +92,7 @@
 
     <script>
         // --- DATA INPUT SECTION (DIRECT JAVASCRIPT OBJECTS) ---
-        // The data is now defined directly as an array of objects to avoid CSV parsing errors.
+        // The data is now defined directly as an array of objects to avoid any parsing errors.
         const allDataInitial = [
             {
                 CARBRAND: 'MERCEDES-BENZ',
@@ -141,24 +141,22 @@
                 // Determine what to display for the Function / DTC column
                 const functionOrDTC = (item.DIAGNOSTICFUNCTION && item.DIAGNOSTICFUNCTION.trim() !== '') ? item.DIAGNOSTICFUNCTION : (item.DTC || '-');
                 
-                // Clean up newlines in instructions by replacing them with a <br> tag for HTML display
-                // NOTE: We no longer need to replace \n because the CSS 'white-space: pre-wrap' handles them.
-                const instructionsHtml = item.INSTRUCTIONS ? item.INSTRUCTIONS.replace(/\n/g, '<br>') : '-';
-                
-                // Format ECU text for display
-                const ecuText = item.ECU ? item.ECU.replace(/\n/g, '<br>') : '-';
+                // Get raw string data for ECU and INSTRUCTIONS. 
+                // The CSS class 'instructions-cell' (white-space: pre-wrap) will handle newlines (\n).
+                const rawInstructions = item.INSTRUCTIONS || '-';
+                const rawEcu = item.ECU || '-';
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-blue-50 transition duration-100';
                 row.innerHTML = `
                     <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.CARBRAND || '-'}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.CARMODEL || '-'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">${ecuText}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">${rawEcu}</td>
                     <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">
                         <span class="block font-semibold text-gray-800">${functionOrDTC}</span>
                         <span class="block text-xs text-red-500">${item.DTC && item.DTC.trim() !== '' ? `DTC: ${item.DTC}` : ''}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm instructions-cell">${instructionsHtml}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm instructions-cell">${rawInstructions}</td>
                 `;
                 tableBody.appendChild(row);
             });
@@ -208,3 +206,4 @@
     </script>
 </body>
 </html>
+
