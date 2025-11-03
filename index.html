@@ -101,7 +101,7 @@
         // 2. GRID ID (GID): This is the ID of the specific sheet/tab you want to display.
         // You find this by opening the Google Sheet (edit view), clicking the tab, 
         // and looking for the number at the end of the URL (e.g., "...#gid=123456789").
-        // '0' is usually the first tab (Sheet1).
+        // '0' is usually the first tab (Sheet1). **MAKE SURE THIS NUMBER IS CORRECT!**
         const SHEET_GID = '0'; 
         
         // Constructs the final CORS-friendly CSV export URL
@@ -131,7 +131,7 @@
             ).filter(h => h.length > 0); // Filter out empty headers
 
             if (headers.length === 0) {
-                 console.error("No valid headers found in the CSV data.");
+                 console.error("No valid headers found in the CSV data. Raw content likely not CSV.");
                  return [];
             }
             
@@ -187,6 +187,10 @@
                 }
 
                 const csvText = await response.text();
+                
+                // *** IMPORTANT DEBUG STEP: Log the raw text to the console ***
+                console.log("Raw Sheet Content Received:", csvText.substring(0, 500) + (csvText.length > 500 ? '...' : ''));
+
                 allData = parseCSV(csvText);
                 
                 if (allData.length === 0) {
@@ -200,7 +204,7 @@
             } catch (error) {
                 console.error("Data loading failed:", error);
                 toggleVisibility(errorMessage, true);
-                errorText.textContent = `Error loading data: ${error.message}. This is often due to Cross-Origin restrictions or an incorrect GID.`;
+                errorText.textContent = `Error loading data: ${error.message}. This is often due to Cross-Origin restrictions, an incorrect GID, or empty sheet content.`;
             } finally {
                 toggleVisibility(loadingIndicator, false);
             }
