@@ -3,206 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MegaTools Diagnostic Database Viewer</title>
-    <!-- Load Tailwind CSS for simple styling -->
+    <title>Diagnostic Instructions Database</title>
+    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom font */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f9fb; /* Light, clean background */
-        }
-        .data-table-container {
-            max-height: 60vh; /* Set a max height for the table */
-            overflow-y: auto; /* Enable vertical scrolling */
-        }
-        /* Custom scrollbar for aesthetics */
-        .data-table-container::-webkit-scrollbar {
+        /* Custom scrollbar style for dark mode */
+        ::-webkit-scrollbar {
             width: 8px;
         }
-        .data-table-container::-webkit-scrollbar-thumb {
-            background-color: #60a5fa; /* Blue scrollbar for brand matching */
+        ::-webkit-scrollbar-track {
+            background: #111827; /* bg-gray-900 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4B5563; /* bg-gray-600 */
             border-radius: 4px;
         }
-        /* Style for pre-formatted instructions: preserves newlines and handles wrapping */
-        .instructions-cell {
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6B7280; /* bg-gray-500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom class for the instructions box to handle long steps */
+        .instructions-box {
             white-space: pre-wrap;
+        }
+        /* Style for the detail panel */
+        #detailPanel {
+            transition: all 0.3s ease-in-out;
+            transform: translateX(100%);
+            z-index: 10;
+        }
+        #detailPanel.active {
+            transform: translateX(0);
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Main Content Area -->
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="p-4 bg-gray-800 shadow-lg sticky top-0 z-20">
+            <h1 class="text-3xl font-bold text-teal-400">Diagnostic Instructions Browser</h1>
+            <p class="text-sm text-gray-400">Searchable guide for ECU and diagnostic procedures.</p>
+        </header>
 
-    <div class="max-w-4xl w-full bg-white shadow-xl rounded-xl p-6 md:p-10 border-t-4 border-blue-600">
-        
-        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">
-            MegaTools Diagnostic Instructions
-        </h1>
-        
-        <!-- Loading Indicator -->
-        <div id="loading-indicator" class="text-center py-8 text-blue-600 font-semibold hidden">
-            Loading Data... Please wait.
-        </div>
+        <!-- Loading & Error Messages -->
+        <div id="statusMessage" class="p-4 bg-yellow-600 text-white font-semibold hidden"></div>
 
-        <!-- Search and Filter Controls -->
-        <div id="search-controls" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 hidden">
-            <div>
-                <label for="car-brand" class="block text-sm font-medium text-gray-700">Car Brand</label>
-                <input type="text" id="car-brand" placeholder="e.g., MERCEDES-BENZ" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+        <!-- Filters and Main List -->
+        <main class="flex-1 overflow-hidden relative">
+            <div class="flex h-full">
+                <!-- Sidebar/Filters (Takes 1/3 on large screens, full width on small screens) -->
+                <div id="filterPanel" class="w-full lg:w-1/3 p-4 bg-gray-800 overflow-y-auto border-r border-gray-700">
+                    <h2 class="text-xl font-semibold mb-4 text-teal-300">Search & Filter</h2>
+
+                    <!-- Filter Inputs -->
+                    <div class="space-y-4">
+                        <input type="text" id="carBrandFilter" placeholder="Car Brand (e.g., MERCEDES-BENZ)"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-200">
+                        <input type="text" id="carModelFilter" placeholder="Car Model (e.g., W205)"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-200">
+                        <input type="text" id="ecuFilter" placeholder="ECU (e.g., EZS, TCM)"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-200">
+                        <input type="text" id="dtcFilter" placeholder="DTC (Error Code)"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-200">
+                        <input type="text" id="functionFilter" placeholder="Diagnostic Function"
+                            class="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-teal-500 focus:border-teal-500 text-gray-200">
+
+                        <button onclick="applyFilters()"
+                            class="w-full p-3 bg-teal-600 text-white font-semibold rounded-md hover:bg-teal-700 transition duration-150">
+                            Apply Filters
+                        </button>
+                    </div>
+
+                    <p id="resultCount" class="mt-4 text-sm text-gray-400"></p>
+
+                    <!-- Results List -->
+                    <div id="resultsList" class="mt-4 space-y-2">
+                        <!-- Results will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Detail Panel (Takes 2/3 on large screens, slides in on small screens) -->
+                <div id="detailPanel" class="lg:w-2/3 absolute lg:relative top-0 right-0 w-full h-full bg-gray-900 overflow-y-auto p-6 shadow-xl lg:shadow-none">
+                    <button onclick="closeDetailPanel()"
+                        class="lg:hidden absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-gray-700 rounded-full">
+                        <!-- Icon from Lucide React: X -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                    <h2 class="text-2xl font-bold mb-4 text-white" id="detailFunction">Select a Procedure</h2>
+                    <div id="detailContent" class="text-gray-300">
+                        <p class="text-lg">Select an item from the left panel to view its full diagnostic instructions here.</p>
+                        <div class="mt-6 p-4 bg-gray-800 rounded-lg space-y-3">
+                            <p><strong class="text-teal-400">Car Brand:</strong> <span id="detailBrand">N/A</span></p>
+                            <p><strong class="text-teal-400">Car Model:</strong> <span id="detailModel">N/A</span></p>
+                            <p><strong class="text-teal-400">ECU:</strong> <span id="detailECU">N/A</span></p>
+                            <p><strong class="text-teal-400">DTC:</strong> <span id="detailDTC">N/A</span></p>
+                            <div class="border-t border-gray-700 pt-4">
+                                <h3 class="text-xl font-semibold text-teal-400 mb-2">Instructions</h3>
+                                <pre id="detailInstructions" class="instructions-box p-3 bg-gray-900 border border-gray-700 rounded-md text-sm leading-relaxed overflow-x-auto">N/A</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-                <label for="ecu" class="block text-sm font-medium text-gray-700">ECU / System</label>
-                <input type="text" id="ecu" placeholder="e.g., EZS or TCM" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
-            </div>
-            <div>
-                <label for="dtc" class="block text-sm font-medium text-gray-700">DTC Code / Function</label>
-                <input type="text" id="dtc" placeholder="e.g., P0171 or DEACTIVATION" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
-            </div>
-        </div>
-
-        <!-- Data Table Display -->
-        <div id="data-table-container" class="data-table-container shadow-inner rounded-lg border border-gray-200">
-            <table id="data-table" class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-blue-100 sticky top-0">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Brand</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Model</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">ECU</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Function / DTC</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-blue-800 uppercase tracking-wider">Instructions</th>
-                    </tr>
-                </thead>
-                <tbody id="table-body" class="bg-white divide-y divide-gray-100">
-                    <!-- Data rows will be inserted here by JavaScript -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Error Message - Hidden now that data is hardcoded -->
-        <div id="error-message" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <strong class="font-bold">Error!</strong>
-            <span class="block sm:inline" id="error-text"></span>
-        </div>
-
-        <button onclick="window.open('https://megatools-lb.com', '_self')"
-            class="mt-8 w-full bg-blue-600 text-white py-3 rounded-lg shadow-md hover:bg-blue-700 transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-            Go Back to Main Website (megatools-lb.com)
-        </button>
+        </main>
     </div>
 
     <script>
-        // --- DATA INPUT SECTION (DIRECT JAVASCRIPT OBJECTS) ---
-        // The data is now defined directly as an array of objects to avoid any parsing errors.
-        const allDataInitial = [
-            {
-                CARBRAND: 'MERCEDES-BENZ',
-                CARMODEL: 'W205',
-                DTC: '',
-                ECU: 'EZS',
-                DIAGNOSTICFUNCTION: 'DEACTIVATION OF SOS',
-                INSTRUCTIONS: 'STEP 1- EZS ECU\nSTEP 2- SETTINGS CHANGEOVER\nSTEP 3- DEACTIVATION OF SOS\nSTEP 4- FROM JA TO NEIN'
-            },
-            {
-                CARBRAND: 'MERCEDES-BENZ',
-                CARMODEL: '',
-                DTC: '',
-                ECU: 'TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2',
-                DIAGNOSTICFUNCTION: 'TCM ERASURE FOR : \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2',
-                INSTRUCTIONS: 'STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP  4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE'
+        // Global variables
+        let diagnosticData = [];
+        const csvText = `CAR BRAND,CAR MODEL,DTC,ECU,DIAGNOSTIC FUNCTION,INSTRUCTIONS
+MERCEDES-BENZ,W205,,EZS,DEACTIVATION OF SOS,"STEP 1- EZS ECU\\nSTEP 2- SETTINGS CHANGEOVER\\nSTEP 3- DEACTIVATION OF SOS\\nSTEP 4- FROM JA TO NEIN"
+MERCEDES-BENZ,,,"TCM \\n\\nVGS-NAG2\\nVGS2-NAG2\\nVGS3-NAG2","TCM ERASURE FOR : \\n\\nVGS-NAG2\\nVGS2-NAG2\\nVGS3-NAG2","STEP 1- MERCEDES-BENZ\\nSTEP 2- THEFT PROTECTION\\nSTEP 3- EXPERT MODE\\nSTEP 4- CONNECT T NINJA BOX\\nSTEP 5- TCU\\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\\nSTEP 7- WIRING DIAGRAM\\nSTEP 8- COMPLETELY ERASE MODULE"`;
+
+        /**
+         * Simple CSV parser that handles quoted fields containing newlines (using regex for simplicity).
+         * @param {string} csv - The raw CSV string data.
+         * @returns {Array<Object>} - Array of objects representing the data rows.
+         */
+        function parseCSV(csv) {
+            try {
+                // Split lines, handle carriage returns
+                const lines = csv.split(/\r?\n/);
+                if (lines.length === 0) return [];
+
+                // Headers are the first line
+                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+                // Simple regex to split rows while respecting quotes and commas inside
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (!line.trim()) continue; // Skip empty lines
+
+                    // Regex to split by comma, but not if the comma is inside quotes (","|[^,])*
+                    // This is a simplified approach, a full CSV parser is complex.
+                    // Given the structured nature of the data, we can use a more robust split logic:
+                    const row = {};
+                    // Use a lookahead regex to match commas not within quotes
+                    const values = line.match(/(?:\"[^\"]*\"|[^,])+/g); 
+                    
+                    if (values && values.length === headers.length) {
+                        for (let j = 0; j < headers.length; j++) {
+                            let value = values[j].trim();
+                            // Remove quotes and unescape newlines
+                            if (value.startsWith('"') && value.endsWith('"')) {
+                                value = value.substring(1, value.length - 1);
+                            }
+                            // Replace CSV escaped newlines with actual newline characters for display/logic
+                            // Also handles the ECU column format from the snippet
+                            row[headers[j]] = value.replace(/\\n/g, '\n').replace(/\\r/g, ''); 
+                        }
+                        data.push(row);
+                    } else {
+                         // Fallback for lines that don't match header count (e.g., malformed lines)
+                         console.error("Skipping malformed row:", line);
+                    }
+                }
+                return data;
+
+            } catch (e) {
+                console.error("Error parsing CSV:", e);
+                document.getElementById('statusMessage').textContent = 'Error loading data. Check console for details.';
+                document.getElementById('statusMessage').classList.remove('hidden', 'bg-yellow-600');
+                document.getElementById('statusMessage').classList.add('bg-red-600');
+                return [];
             }
-        ];
-
-
-        // --- GLOBAL VARIABLES & INITIALIZATION ---
-        let allData = [];
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const searchControls = document.getElementById('search-controls');
-        const tableBody = document.getElementById('table-body');
-
-        // Helper function to show/hide elements
-        const toggleVisibility = (element, show) => element.classList.toggle('hidden', !show);
-
-        // Renders the data into the HTML table
-        function renderTable(data) {
-            tableBody.innerHTML = '';
-            
-            if (data.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="px-4 py-4 text-center text-gray-500">
-                            No results found. Try adjusting your filters.
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            data.forEach(item => {
-                // Determine what to display for the Function / DTC column
-                const functionOrDTC = (item.DIAGNOSTICFUNCTION && item.DIAGNOSTICFUNCTION.trim() !== '') ? item.DIAGNOSTICFUNCTION : (item.DTC || '-');
-                
-                // Get raw string data for ECU and INSTRUCTIONS. 
-                // The CSS class 'instructions-cell' (white-space: pre-wrap) will handle newlines (\n).
-                const rawInstructions = item.INSTRUCTIONS || '-';
-                const rawEcu = item.ECU || '-';
-                
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-blue-50 transition duration-100';
-                row.innerHTML = `
-                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.CARBRAND || '-'}</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.CARMODEL || '-'}</td>
-                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">${rawEcu}</td>
-                    <td class="px-4 py-3 text-sm text-gray-500 instructions-cell">
-                        <span class="block font-semibold text-gray-800">${functionOrDTC}</span>
-                        <span class="block text-xs text-red-500">${item.DTC && item.DTC.trim() !== '' ? `DTC: ${item.DTC}` : ''}</span>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-gray-700 max-w-sm instructions-cell">${rawInstructions}</td>
-                `;
-                tableBody.appendChild(row);
-            });
         }
 
-        // Filters the data based on input fields
-        function filterData() {
-            const brandFilter = document.getElementById('car-brand').value.toUpperCase();
-            const ecuFilter = document.getElementById('ecu').value.toUpperCase();
-            const dtcFilter = document.getElementById('dtc').value.toUpperCase();
-
-            const filtered = allData.filter(item => {
-                const carBrand = (item.CARBRAND || '').toUpperCase();
-                const ecu = (item.ECU || '').toUpperCase();
-                
-                const brandMatch = !brandFilter || carBrand.includes(brandFilter);
-                const ecuMatch = !ecuFilter || ecu.includes(ecuFilter);
-                
-                // Match DTC filter against both the DTC column and the Diagnostic Function column for robustness
-                const dtcOrFunctionText = `${item.DTC || ''} ${item.DIAGNOSTICFUNCTION || ''}`.toUpperCase();
-                const dtcMatch = !dtcFilter || dtcOrFunctionText.includes(dtcFilter);
-                
-                return brandMatch && ecuMatch && dtcMatch;
-            });
-
-            renderTable(filtered);
+        /**
+         * Initializes the application by loading data and setting up the UI.
+         */
+        function initializeApp() {
+            diagnosticData = parseCSV(csvText);
+            applyFilters(); // Initial render of all data
         }
 
-        // Add event listeners to filter inputs
-        document.getElementById('car-brand').addEventListener('input', filterData);
-        document.getElementById('ecu').addEventListener('input', filterData);
-        document.getElementById('dtc').addEventListener('input', filterData);
-
-
-        // Load static data on window load
-        window.onload = function() {
-            // Initialize data directly from the object array
-            allData = allDataInitial;
+        /**
+         * Applies filters and updates the results list.
+         */
+        function applyFilters() {
+            const brand = document.getElementById('carBrandFilter').value.toUpperCase();
+            const model = document.getElementById('carModelFilter').value.toUpperCase();
+            const ecu = document.getElementById('ecuFilter').value.toUpperCase();
+            const dtc = document.getElementById('dtcFilter').value.toUpperCase();
+            const func = document.getElementById('functionFilter').value.toUpperCase();
+            const resultsList = document.getElementById('resultsList');
             
-            // Render the data immediately
-            renderTable(allData);
+            resultsList.innerHTML = ''; // Clear previous results
+
+            const filteredData = diagnosticData.filter(item => {
+                const brandMatch = !brand || (item['CAR BRAND'] && item['CAR BRAND'].toUpperCase().includes(brand));
+                const modelMatch = !model || (item['CAR MODEL'] && item['CAR MODEL'].toUpperCase().includes(model));
+                // Use the raw (newline-included) ECU field for filtering
+                const ecuMatch = !ecu || (item['ECU'] && item['ECU'].toUpperCase().includes(ecu));
+                const dtcMatch = !dtc || (item['DTC'] && item['DTC'].toUpperCase().includes(dtc));
+                const funcMatch = !func || (item['DIAGNOSTIC FUNCTION'] && item['DIAGNOSTIC FUNCTION'].toUpperCase().includes(func));
+
+                return brandMatch && modelMatch && ecuMatch && dtcMatch && funcMatch;
+            });
+
+            document.getElementById('resultCount').textContent = `Showing ${filteredData.length} procedures.`;
+
+            if (filteredData.length === 0) {
+                resultsList.innerHTML = '<p class="text-gray-500 p-4">No results found matching your criteria.</p>';
+            } else {
+                filteredData.forEach(item => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'bg-gray-700 hover:bg-teal-700 p-3 rounded-lg cursor-pointer transition duration-150 shadow-md border-l-4 border-teal-500';
+                    resultItem.innerHTML = `
+                        <p class="font-semibold text-white">${item['DIAGNOSTIC FUNCTION']}</p>
+                        <p class="text-sm text-gray-300">Brand: ${item['CAR BRAND'] || 'N/A'} | Model: ${item['CAR MODEL'] || 'N/A'}</p>
+                        <p class="text-xs text-gray-400 mt-1">ECU: ${item['ECU'] ? item['ECU'].split('\n')[0].trim() : 'N/A'}</p>
+                    `;
+                    // Attach click handler to show details
+                    resultItem.onclick = () => showDetails(item);
+                    resultsList.appendChild(resultItem);
+                });
+            }
+        }
+
+        /**
+         * Displays the full details of a selected diagnostic procedure.
+         * @param {Object} item - The data item to display.
+         */
+        function showDetails(item) {
+            document.getElementById('detailFunction').textContent = item['DIAGNOSTIC FUNCTION'] || 'Procedure Details';
+            document.getElementById('detailBrand').textContent = item['CAR BRAND'] || 'N/A';
+            document.getElementById('detailModel').textContent = item['CAR MODEL'] || 'N/A';
+            // Display ECU with newlines preserved in the text content
+            document.getElementById('detailECU').textContent = item['ECU'] || 'N/A';
+            document.getElementById('detailDTC').textContent = item['DTC'] || 'N/A';
             
-            // Hide the loading indicator and show the search controls
-            toggleVisibility(loadingIndicator, false);
-            toggleVisibility(searchControls, true);
-        };
+            // Display instructions in the <pre> tag, preserving newlines
+            document.getElementById('detailInstructions').textContent = item['INSTRUCTIONS'] || 'No instructions provided.';
+
+            // Show detail panel on small screens
+            const detailPanel = document.getElementById('detailPanel');
+            if (window.innerWidth < 1024) { // 1024px is Tailwind's 'lg' breakpoint
+                detailPanel.classList.add('active');
+            }
+        }
+
+        /**
+         * Closes the detail panel on small screens.
+         */
+        function closeDetailPanel() {
+            document.getElementById('detailPanel').classList.remove('active');
+        }
+
+        // Initialize when the window loads
+        window.onload = initializeApp;
+
     </script>
 </body>
 </html>
