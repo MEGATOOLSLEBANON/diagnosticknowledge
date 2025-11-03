@@ -93,9 +93,10 @@
     <script>
         // --- DATA INPUT SECTION (FULL DATA CONTENT) ---
         // The data is now stored directly as a multi-line CSV string.
+        // FIX: Ensured multi-line fields (ECU, Diagnostic Function for the second row) are properly quoted.
         const rawCSVData = `
 MERCEDES-BENZ,W205,,EZS,DEACTIVATION OF SOS,"STEP 1- EZS ECU\nSTEP 2- SETTINGS CHANGEOVER\nSTEP 3- DEACTIVATION OF SOS\nSTEP 4- FROM JA TO NEIN"
-MERCEDES-BENZ,,,"TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP  4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE"
+MERCEDES-BENZ,,"","TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","STEP 1- MERCEDES-BENZ\nSTEP 2- THEFT PROTECTION\nSTEP 3- EXPERT MODE\nSTEP  4- CONNECT T NINJA BOX\nSTEP 5- TCU\nSTEP 6- CHOOSE RELEVANT TCU (VGS-NAG2/VGS2-NAG2/VGS3-NAG2)\nSTEP 7- WIRING DIAGRAM\nSTEP 8- COMPLETELY ERASE MODULE"
 `;
 
 
@@ -118,6 +119,7 @@ MERCEDES-BENZ,,,"TCM \n\nVGS-NAG2\nVGS2-NAG2\nVGS3-NAG2","TCM ERASURE FOR : \n\n
             
             const splitLine = (line) => {
                 // Regex to split by comma, but ignore commas inside double quotes
+                // This regex is essential for handling commas within a quoted field
                 const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
                 return line.split(regex).map(cell => cell.trim());
             };
